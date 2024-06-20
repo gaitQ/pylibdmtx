@@ -333,7 +333,7 @@ def _encoder():
         dmtxEncodeDestroy(byref(encoder))
 
 
-def encode(data, scheme=None, size=None):
+def encode(data, scheme=None, size=None, module_size=4, fnc1=None):
     """
     Encodes `data` in a DataMatrix image.
 
@@ -345,6 +345,8 @@ def encode(data, scheme=None, size=None):
             If `None`, defaults to 'Ascii'.
         size: image dimensions - one of `ENCODING_SIZE_NAMES`, or `None`.
             If `None`, defaults to 'ShapeAuto'.
+        module_size: int size of a 'module' in pixels
+        fnc1: bytes single character to in data to replace with the out-of-band FNC1 symbol
 
     Returns:
         Encoded: with properties `(width, height, bpp, pixels)`.
@@ -379,8 +381,12 @@ def encode(data, scheme=None, size=None):
     with _encoder() as encoder:
         dmtxEncodeSetProp(encoder, DmtxProperty.DmtxPropScheme, scheme)
         dmtxEncodeSetProp(encoder, DmtxProperty.DmtxPropSizeRequest, size)
+        if fnc1:
+            dmtxEncodeSetProp(encoder, DmtxProperty.DmtxPropFnc1, fnc1[0])
 
-        if dmtxEncodeDataMatrix(encoder, len(data), cast(data, c_ubyte_p)) == 0:
+        dmtxEncodeSetProp(encoder, DmtxProperty.DmtxPropModuleSize, module_size)
+
+        if dmtxEncodeDataMatrix(encoder, len(data), cast(ctypes.c_char_p(data), c_ubyte_p)) == 0:
             raise PyLibDMTXError(
                 'Could not encode data, possibly because the image is not '
                 'large enough to contain the data'
@@ -393,10 +399,10 @@ def encode(data, scheme=None, size=None):
                 DmtxProperty.DmtxPropBitsPerPixel
             )
         )
-        size = w * h * bpp // 8
+        image_size = w * h * bpp // 8
         pixels = cast(
-            encoder[0].image[0].pxl, ctypes.POINTER(ctypes.c_ubyte * size)
+            encoder[0].image[0].pxl, ctypes.POINTER(ctypes.c_ubyte * image_size)
         )
         return Encoded(
-            width=w, height=h, bpp=bpp, pixels=ctypes.string_at(pixels, size)
+            width=w, height=h, bpp=bpp, pixels=ctypes.string_at(pixels, image_size)
         )
